@@ -60,7 +60,9 @@ juce_add_plugin(${PROJECT_NAME}
         PLUGIN_MANUFACTURER_CODE 
         PLUGIN_CODE 
         FORMATS "${FORMATS}"
-        PRODUCT_NAME "Bountiful"        
+        PRODUCT_NAME "Bountiful"
+        LV2URI https://github.com/KiTiKDub/Bountiful
+        LV2_SHARED_LIBRARY_NAME Bountiful        
         )
 
 # How we want our SourceFiles to appear in our IDE
