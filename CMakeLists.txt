@@ -28,6 +28,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(juce)
 
+FetchContent_Declare(
+        kfr
+        GIT_REPOSITORY https://github.com/kfrlib/kfr
+        GIT_TAG main
+        GIT_SHALLOW ON
+)
+FetchContent_MakeAvailable(kfr)
+
 # Make sure you include any new source files here
 set(SourceFiles
         Source/PluginEditor.cpp
@@ -90,6 +98,7 @@ target_compile_definitions(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
         Assets
+        kfr
         juce::juce_analytics
         juce::juce_audio_basics
         juce::juce_audio_devices

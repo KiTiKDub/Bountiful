@@ -12,6 +12,8 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                      #endif
                        )
 {
+    distort = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("distort"));
+    binFactor = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("binFactor"));
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
@@ -130,27 +132,33 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
+    size_t numSamples = buffer.getNumSamples();
+
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    auto readerLeft = buffer.getReadPointer(0);
+    auto readerRight = buffer.getReadPointer(1);
+
+    auto univectorLeft = kfr::make_univector(readerLeft, numSamples);
+    auto univectorRight = kfr::make_univector(readerRight, numSamples);
+
+    auto freqLeft = kfr::realdft(univectorLeft);
+    auto freqRight = kfr::realdft(univectorRight);
+    kfr::univector<std::complex<float>, 512> dataLeft;
+    kfr::univector<std::complex<float>, 512> dataRight;
+    dataLeft = freqLeft * distort->get();
+    dataRight = freqRight * distort->get();
+
+    auto transformLeft = kfr::idft(dataLeft);
+    auto transformRight = kfr::idft(dataRight);
+    buffer.clear();
+    for (int i = 0; i < numSamples; i++)
     {
-        auto* channelData = buffer.getWritePointer (channel);
-        juce::ignoreUnused (channelData);
-        // ..do something to the data...
+        buffer.addSample(0, i, transformLeft.data()->real());
+        buffer.addSample(1, i, transformRight.data()->real());
     }
+
 }
 
 //==============================================================================
@@ -161,7 +169,8 @@ bool AudioPluginAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 {
-    return new AudioPluginAudioProcessorEditor (*this);
+    /*return new AudioPluginAudioProcessorEditor (*this);*/
+    return new juce::GenericAudioProcessorEditor(*this);
 }
 
 //==============================================================================
@@ -178,6 +187,20 @@ void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeI
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
     juce::ignoreUnused (data, sizeInBytes);
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout AudioPluginAudioProcessor::createParameterLayout()
+{
+    using namespace juce;
+
+    AudioProcessorValueTreeState::ParameterLayout layout;
+
+    auto distortRange = NormalisableRange<float>(1, 2, .01, 1);
+
+    layout.add(std::make_unique<AudioParameterFloat>("distort", "Distort", distortRange, 1));
+    layout.add(std::make_unique<AudioParameterInt>("binFactor", "Bin Factor", 10, 12, 10));
+
+    return layout;
 }
 
 //==============================================================================
